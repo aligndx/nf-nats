@@ -59,6 +59,7 @@ dependencies {
     compileOnly 'org.slf4j:slf4j-api:1.7.10'
     compileOnly 'org.pf4j:pf4j:3.4.1'
     // add here plugins depepencies
+    implementation 'io.nats:jnats:2.14.2'
 
     // test configuration
     testImplementation "org.apache.groovy:groovy:4.0.18"

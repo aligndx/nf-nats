@@ -14,29 +14,29 @@
  * limitations under the License.
  */
 
-package nextflow.hello
+package nextflow.nats
 
 import groovy.transform.CompileStatic
-import groovy.util.logging.Slf4j
 import nextflow.Session
 import nextflow.trace.TraceObserver
-
+import nextflow.trace.TraceObserverFactory
 /**
- * Example workflow events observer
+ * Factory logic for Nats Observer
  *
- * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-@Slf4j
 @CompileStatic
-class HelloObserver implements TraceObserver {
+class NatsFactory implements TraceObserverFactory {
 
     @Override
-    void onFlowCreate(Session session) {
-        log.info "Pipeline is starting! 🚀"
-    }
-
-    @Override
-    void onFlowComplete() {
-        log.info "Pipeline complete! 👋"
+    Collection<TraceObserver> create(Session session) {
+        def isEnabled = session.config.navigate('nats.enabled') as Boolean
+        def url = session.config.navigate('nats.url') as String
+        def subject = session.config.navigate('nats.subject') as String
+        def result = new ArrayList()
+        if ( isEnabled ) {
+            def observer = new NatsObserver(url, subject)
+            result << observer
+        }
+        return result
     }
 }

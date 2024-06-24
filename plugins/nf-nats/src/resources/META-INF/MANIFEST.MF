@@ -1,0 +1,6 @@
+Manifest-Version: 1.0
+Plugin-Id: nf-nats
+Plugin-Version: 1.0.0
+Plugin-Class: nextflow.nats.NatsPlugin
+Plugin-Provider: nextflow
+Plugin-Requires: >=24.01.0
