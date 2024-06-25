@@ -32,7 +32,7 @@ class NatsFactory implements TraceObserverFactory {
         def isEnabled = session.config.navigate('nats.enabled') as Boolean
         def url = session.config.navigate('nats.url') as String
         def subject = session.config.navigate('nats.subject') as String
-        def events = session.config.navigate('nats.events') as List<String> ?: ['flow.start', 'process.start', 'process.complete', 'flow.error', 'flow.complete', 'process.logs']
+        def events = session.config.navigate('nats.events') as List<String> ?: ['workflow.start', 'workflow.error', 'workflow.complete', 'process.start', 'process.complete', 'process.logs']
         def jetstream = session.config.navigate('nats.jetstream') as Boolean ?: false
 
         def result = new ArrayList()
