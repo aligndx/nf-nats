@@ -1,5 +1,6 @@
 
 config ?= compileClasspath
+version ?= $(shell grep 'Plugin-Version' plugins/nf-nats/src/resources/META-INF/MANIFEST.MF | awk '{ print $$2 }')
 
 ifdef module 
 mm = :${module}:
@@ -57,6 +58,12 @@ assemble:
 #
 buildPlugins:
 	./gradlew copyPluginZip
+
+
+install:
+	./gradlew copyPluginZip
+	rm -rf ${HOME}/.nextflow/plugins/nf-nats-${version}
+	cp -r build/plugins/nf-nats-${version} ${HOME}/.nextflow/plugins/
 
 #
 # Upload JAR artifacts to Maven Central

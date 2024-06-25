@@ -25,8 +25,9 @@ import nextflow.processor.TaskHandler
 import nextflow.trace.TraceObserver
 import nextflow.trace.TraceRecord
 
-import io.nats.client.Connection;
-import io.nats.client.Nats;
+import io.nats.client.Connection
+import io.nats.client.Nats
+import io.nats.client.JetStream
 
 /**
  * Workflow events Nats publisher
@@ -37,34 +38,72 @@ import io.nats.client.Nats;
 class NatsObserver implements TraceObserver {
 
     private Connection nc
+    private JetStream js
     private String subject
-    private String nats_url
+    private String natsUrl
+    private Set<String> eventsToPublish
+    private boolean useJetStream
 
-    NatsObserver(String nats_url, String subject) {
+    NatsObserver(String natsUrl, String subject, Set<String> eventsToPublish, boolean useJetStream) {
         // Connect to NATS
-        this.nc = Nats.connect(nats_url)
+        this.nc = Nats.connect(natsUrl)
         this.subject = subject
+        this.eventsToPublish = eventsToPublish
+        this.useJetStream = useJetStream
+
+        if (useJetStream) {
+            this.js = nc.jetStream()
+        }
     }
 
     void publishEvent(String eventType, String message) {
-        String sub_subject = "${subject}.task.events"
-        nc.publish(sub_subject, ("[" + eventType + "] " + message).bytes)
+        if (eventsToPublish.contains(eventType)) {
+            String subSubject = "${subject}.events.${eventType}"
+            String formattedMessage = createJsonMessage(eventType, message)
+            if (useJetStream) {
+                js.publish(subSubject, formattedMessage.bytes)
+            } else {
+                nc.publish(subSubject, formattedMessage.bytes)
+            }
+        }
     }
 
-     void publishLog(String logType, String message) {
-        String sub_subject = "${subject}.task.logs"
-        nc.publish(sub_subject, ("[" + logType + "] " + message).bytes)
+    void publishLog(String logType, String message) {
+        if (eventsToPublish.contains("process.logs")) {
+            String subSubject = "${subject}.logs.${logType}"
+            String formattedMessage = createJsonMessage(logType, message)
+            if (useJetStream) {
+                js.publish(subSubject, formattedMessage.bytes)
+            } else {
+                nc.publish(subSubject, formattedMessage.bytes)
+            }
+        }
+    }
+
+    private String createJsonMessage(String type, String message) {
+        return "{\"type\": \"${type}\", \"message\": \"${message}\"}"
     }
 
     @Override
     void onFlowBegin() {
-        publishEvent("flow.begin", "Workflow execution started")
+        publishEvent("workflow.start", "Workflow execution started")
+    }
+
+    @Override
+    void onFlowError(TaskHandler handler, TraceRecord trace) {
+        publishEvent("workflow.error", "Workflow encountered an error")
+        publishLogs(handler)
+    }
+
+    @Override
+    void onFlowComplete() {
+        publishEvent("workflow.complete", "Workflow execution completed")
+        nc.close()
     }
 
     @Override
     void onProcessStart(TaskHandler handler, TraceRecord trace) {
         publishEvent("process.start", "Started task: '${handler.task.name}'")
-        publishLogs(handler)
     }
 
     @Override
@@ -72,37 +111,38 @@ class NatsObserver implements TraceObserver {
         publishEvent("process.complete", "Completed task: '${handler.task.name}'")
         publishLogs(handler)
     }
- 
-    @Override
-    void onFlowError(TaskHandler handler, TraceRecord trace) {
-        publishEvent("flow.error", "Workflow encountered an error")
-        publishLogs(handler)
-    }
-
-    @Override
-    void onFlowComplete() {
-        publishEvent("flow.complete", "Workflow execution completed")
-        nc.close()
-    }
 
     void publishLogs(TaskHandler handler) {
         Path workDir = handler.task.workDir
 
-        try {
-            Path stdoutPath = workDir.resolve("stdout")
-            Path stderrPath = workDir.resolve("stderr")
+        if (workDir == null) {
+            log.warn("Task '${handler.task.name}' workDir is null")
+            return
+        }
 
-            if (Files.exists(stdoutPath)) {
-                String stdout = new String(Files.readAllBytes(stdoutPath))
-                publishLog("stdout", "Task '${handler.task.name}' stdout: ${stdout}")
+        try {
+            log.debug("Checking logs for task: '${handler.task.name}' in directory: ${workDir}")
+
+            Path commandOutPath = workDir.resolve(".command.out")
+            Path commandErrPath = workDir.resolve(".command.err")
+
+            if (Files.exists(commandOutPath)) {
+                log.debug("Found .command.out for task: '${handler.task.name}'")
+                String commandOut = new String(Files.readAllBytes(commandOutPath))
+                publishLog("logs.stdout", "Task '${handler.task.name}' : ${commandOut}")
+            } else {
+                log.debug("No .command.out found for task: '${handler.task.name}'")
             }
 
-            if (Files.exists(stderrPath)) {
-                String stderr = new String(Files.readAllBytes(stderrPath))
-                publishLog("stderr", "Task '${handler.task.name}' stderr: ${stderr}")
+            if (Files.exists(commandErrPath)) {
+                log.debug("Found .command.err for task: '${handler.task.name}'")
+                String commandErr = new String(Files.readAllBytes(commandErrPath))
+                publishLog("logs.stderr", "Task '${handler.task.name}' : ${commandErr}")
+            } else {
+                log.debug("No .command.err found for task: '${handler.task.name}'")
             }
         } catch (IOException e) {
-            e.printStackTrace()
+            log.error("Error reading log files for task '${handler.task.name}'", e)
         }
     }
 }
