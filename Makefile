@@ -65,6 +65,11 @@ install:
 	rm -rf ${HOME}/.nextflow/plugins/nf-nats-${version}
 	cp -r build/plugins/nf-nats-${version} ${HOME}/.nextflow/plugins/
 
+install-in-container:
+	./gradlew copyPluginZip
+	mkdir -p ${HOME}.nextflow/plugins/
+	cp -r build/plugins/nf-nats-${version} ${HOME}.nextflow/plugins/
+
 #
 # Upload JAR artifacts to Maven Central
 #

@@ -70,27 +70,28 @@ class NatsObserver implements TraceObserver {
     }
 
     private String createJsonMessage(String type, String message, TraceRecord trace = null) {
-        Map<String, Object> messageMap = [
-            timestamp: DateTimeFormatter.ISO_INSTANT.format(Instant.now()),
-            type     : type,
-            message  : message
-        ]
+        Map<String, Object> messageMap = [:]
+        messageMap.put('timestamp', DateTimeFormatter.ISO_INSTANT.format(Instant.now()))
+        messageMap.put('type', type)
+        messageMap.put('message', message)
 
         if (trace != null) {
+            // Create metadata map with non-null fields
+            Map<String, Object> metadata = [:]
             Object startObj = trace.get('start')
             Object completeObj = trace.get('complete')
 
-            String formattedStart = startObj ? DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(startObj as Long)) : ''
-            String formattedComplete = completeObj ? DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(completeObj as Long)) : ''
+            if (trace.get('task_id') != null) metadata.put('id', trace.get('task_id'))
+            if (trace.get('name') != null) metadata.put('name', trace.get('name'))
+            if (trace.get('status') != null) metadata.put('status', trace.get('status'))
+            if (startObj != null) metadata.put('start', DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(startObj as Long)))
+            if (completeObj != null) metadata.put('complete', DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(completeObj as Long)))
+            if (trace.get('realtime') != null) metadata.put('realtime', trace.get('realtime'))
 
-            messageMap.task = [
-                id       : trace.get('task_id'),
-                name     : trace.get('name'),
-                status   : trace.get('status'),
-                start    : formattedStart,
-                complete : formattedComplete,
-                realtime : "${trace.get('realtime')}ms"
-            ]
+            // Add metadata to message map if it's not empty
+            if (!metadata.isEmpty()) {
+                messageMap.put('metadata', metadata)
+            }
         }
 
         return new groovy.json.JsonBuilder(messageMap).toString()
@@ -104,7 +105,13 @@ class NatsObserver implements TraceObserver {
     @Override
     void onFlowError(TaskHandler handler, TraceRecord trace) {
         publishEvent('workflow.error', 'Workflow encountered an error', trace)
-        publishLogs(handler, trace)
+
+        // Check if handler is not null before proceeding
+        if (handler != null) {
+            publishLogs(handler, trace)
+        } else {
+            log.warn('TaskHandler is null during onFlowError')
+        }
         nc.close()
     }
 
@@ -126,6 +133,12 @@ class NatsObserver implements TraceObserver {
     }
 
     void publishLogs(TaskHandler handler, TraceRecord trace) {
+        // Check if handler or handler.task is null
+        if (handler == null || handler.task == null) {
+            log.warn('Cannot publish logs because TaskHandler or Task is null')
+            return
+        }
+
         Path workDir = handler.task.workDir
         if (workDir == null) {
             log.warn("Task '${handler.task.name}' workDir is null")
