@@ -19,10 +19,10 @@ plugins {
     id "io.nextflow.nf-build-plugin" version "1.0.1"
 }
 
-ext.github_organization = 'nextflow-io'
-ext.github_username = project.findProperty('github_username') ?: 'pditommaso'
+ext.github_organization = project.findProperty('github_organization') ?: System.getenv('GITHUB_ORGANIZATION')
+ext.github_username = project.findProperty('github_username') ?: System.getenv('GITHUB_USERNAMe')
 ext.github_access_token = project.findProperty('github_access_token') ?: System.getenv('GITHUB_TOKEN')
-ext.github_commit_email = project.findProperty('github_commit_email') ?: 'paolo.ditommaso@gmail.com'
+ext.github_commit_email = project.findProperty('github_commit_email') ?: System.getenv('GITHUB_COMMIT_EMAIL')
 
 jar.enabled = false
 
